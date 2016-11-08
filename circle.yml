@@ -1,11 +1,11 @@
 machine:
   environment:
-    CIRCLE_CACHE_DIR: ~/cache
+    CIRCLE_CACHE_DIR: $(echo ~/cache)
     IMPORT_PATH: "github.com/$CIRCLE_PROJECT_USERNAME/$CIRCLE_PROJECT_REPONAME"
     SINGLE_GOPATH: "`echo $GOPATH | awk -F: '{ print $1 }'`"
     SRC_GOPATH: "$SINGLE_GOPATH/src/$IMPORT_PATH/"
   post:
-    - circle/setup-go.sh
+    - cd $CIRCLE_PROJECT_REPONAME && circle/setup-go.sh
 
 dependencies:
   cache_directories:
