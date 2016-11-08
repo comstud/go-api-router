@@ -1,0 +1,25 @@
+machine:
+  environment:
+    CIRCLE_CACHE_DIR: ~/cache
+    IMPORT_PATH: "github.com/$CIRCLE_PROJECT_USERNAME/$CIRCLE_PROJECT_REPONAME"
+    SINGLE_GOPATH: "`echo $GOPATH | awk -F: '{ print $1 }'`"
+    SRC_GOPATH: "$SINGLE_GOPATH/src/$IMPORT_PATH/"
+  post:
+    - circle/setup-go.sh
+
+dependencies:
+  cache_directories:
+    - $CIRCLE_CACHE_DIR
+  pre:
+    - go get -u github.com/tools/godep
+
+  override:
+    - mkdir -p "$SRC_GOPATH"
+    - rsync -azC --delete ./ "$SRC_GOPATH"
+
+test:
+  pre:
+    - go vet ./...
+
+  override:
+    - cd "$SRC_GOPATH" && go test -v -race ./...
