@@ -9,7 +9,7 @@ machine:
 
 dependencies:
   cache_directories:
-    - $CIRCLE_CACHE_DIR
+    - ~/cache
   pre:
     - go get -u github.com/tools/godep
 
