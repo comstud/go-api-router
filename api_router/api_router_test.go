@@ -93,6 +93,19 @@ func POST(path string, ctype string, text string) *http.Response {
 	return resp
 }
 
+func TestGETWithNoResponse(t *testing.T) {
+	router.GET("/EmptyResponse", func(ctx context.Context) {
+		rctx := router.RequestContext(ctx)
+		rctx.SetStatus(345)
+	})
+
+	resp := GET("/EmptyResponse")
+
+	if resp.StatusCode != 345 {
+		t.Errorf("Got unexpected status for GET: %d\n", resp.StatusCode)
+	}
+}
+
 func TestGETWithWriteResponse(t *testing.T) {
 	response_string := "response data"
 
