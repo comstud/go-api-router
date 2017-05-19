@@ -109,12 +109,12 @@ func TestGETWithNoResponse(t *testing.T) {
 func TestGETWithWriteResponse(t *testing.T) {
 	response_string := "response data"
 
-	var writer ResponseWriter
+	var writer ResponseTracker
 
 	router.GET("/WriteResponse", func(ctx context.Context) {
 		rctx := router.RequestContext(ctx)
 		rctx.WriteResponse([]byte(response_string))
-		writer = rctx.ResponseWriter()
+		writer = rctx.ResponseTracker()
 	})
 
 	resp := GET("/WriteResponse")
@@ -132,7 +132,7 @@ func TestGETWithWriteResponse(t *testing.T) {
 		t.Errorf("writer Status != 200: %d\n", writer.Status())
 	}
 
-	if writer.Size() != len(response_string) {
+	if writer.Size() != int64(len(response_string)) {
 		t.Errorf("writer Size != %d: %d\n",
 			len(response_string), writer.Size(),
 		)
@@ -142,12 +142,12 @@ func TestGETWithWriteResponse(t *testing.T) {
 func TestGETWithWriteResponseString(t *testing.T) {
 	response_string := "response string"
 
-	var writer ResponseWriter
+	var writer ResponseTracker
 
 	router.GET("/WriteResponseString", func(ctx context.Context) {
 		rctx := router.RequestContext(ctx)
 		rctx.WriteResponseString(response_string)
-		writer = rctx.ResponseWriter()
+		writer = rctx.ResponseTracker()
 	})
 
 	resp := GET("/WriteResponseString")
@@ -165,7 +165,7 @@ func TestGETWithWriteResponseString(t *testing.T) {
 		t.Errorf("writer Status != 200: %d\n", writer.Status())
 	}
 
-	if writer.Size() != len(response_string) {
+	if writer.Size() != int64(len(response_string)) {
 		t.Errorf("writer Size != %d: %d\n",
 			len(response_string), writer.Size(),
 		)

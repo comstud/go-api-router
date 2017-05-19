@@ -66,7 +66,7 @@ func (self *Route) register() *Route {
 
 func (self *Route) handleRequest(w http.ResponseWriter, r *http.Request) {
 	ctx := NewContextForRequest(
-		newResponseWriter(w, self.defaultStatus),
+		newResponseTracker(w, self.defaultStatus, self.router.storeResponses),
 		r,
 		self,
 	)

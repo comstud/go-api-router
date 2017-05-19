@@ -23,7 +23,7 @@ func (self *contextKey) String() string {
 type RequestContext struct {
 	context.Context
 	request             *http.Request
-	writer              ResponseWriter
+	writer              ResponseTracker
 	currentRoute        *Route
 	routeVars           map[string]string
 	statusHeaderWritten bool
@@ -86,14 +86,18 @@ func (self *RequestContext) Header(name string) string {
 }
 
 func (self *RequestContext) SetStatus(status int) {
-	self.writer.SetStatus(status)
+	self.writer.WriteHeader(status)
 }
 
 func (self *RequestContext) SetResponseHeader(name, val string) {
-	self.writer.Header()[name] = []string{val}
+	self.writer.Header().Set(name, val)
 }
 
-func (self *RequestContext) ResponseWriter() ResponseWriter {
+func (self *RequestContext) ResponseWriter() http.ResponseWriter {
+	return self.writer
+}
+
+func (self *RequestContext) ResponseTracker() ResponseTracker {
 	return self.writer
 }
 
@@ -111,7 +115,7 @@ func (self *RequestContext) WriteResponseString(data string) (err error) {
 	return
 }
 
-func NewContextForRequest(w ResponseWriter, r *http.Request, cur_route *Route) *RequestContext {
+func NewContextForRequest(w ResponseTracker, r *http.Request, cur_route *Route) *RequestContext {
 	vars := cur_route.RouteVars(r)
 	if vars == nil {
 		vars = make(map[string]string)

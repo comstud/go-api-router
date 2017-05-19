@@ -10,8 +10,6 @@ machine:
 dependencies:
   cache_directories:
     - ~/cache
-  pre:
-    - go get -u github.com/tools/godep
 
   override:
     - mkdir -p "$SRC_GOPATH"

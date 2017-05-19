@@ -10,6 +10,7 @@ type NewRouteNotifier func(*Route, ...interface{})
 
 type Router struct {
 	basePath         string
+	storeResponses   bool
 	fwRouter         FrameworkRouter
 	topRouter        *Router
 	newRouteNotifier NewRouteNotifier
@@ -96,6 +97,11 @@ func (self *Router) PUT(path string, fn RouteFn, opts ...interface{}) *Route {
 
 func (self *Router) RequestContext(ctx context.Context) *RequestContext {
 	return RequestContextFromContext(ctx)
+}
+
+func (self *Router) StoreResponses() *Router {
+	self.storeResponses = true
+	return self
 }
 
 func NewRouter(framework Framework) *Router {

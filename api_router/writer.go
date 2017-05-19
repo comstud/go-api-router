@@ -1,178 +1,122 @@
 package api_router
 
-import "net/http"
+import (
+	"bytes"
+	"io"
+	"net/http"
 
-type ResponseWriter interface {
+	"github.com/felixge/httpsnoop"
+)
+
+type ResponseTracker interface {
 	http.ResponseWriter
 	SetStatus(int)
 	WriteStatusHeader()
 	Status() int
-	Size() int
-	ResponseCopy() []byte
+	Size() int64
+	Response() []byte
 }
 
-type baseResponseWriter struct {
+type responseTracker struct {
 	http.ResponseWriter
-	defaultStatus int
+	storeResponse bool
 	statusWritten bool
+	defaultStatus int
 	status        int
-	size          int
+	size          int64
 	response      []byte
 }
 
-func (self *baseResponseWriter) writeStatusHeader() {
-	if self.status == 0 {
-		self.status = self.defaultStatus
+func (rw *responseTracker) writeStatusHeader() {
+	if rw.status == 0 {
+		rw.status = rw.defaultStatus
 	}
-	self.ResponseWriter.WriteHeader(self.status)
-	self.statusWritten = true
+	rw.WriteHeader(rw.status)
+	rw.statusWritten = true
 }
 
-func (self *baseResponseWriter) Write(b []byte) (int, error) {
-	if !self.statusWritten {
-		self.writeStatusHeader()
-	}
-	self.response = append(self.response, b...)
-	size, err := self.ResponseWriter.Write(b)
-	self.size += size
-	return size, err
-}
-
-func (self *baseResponseWriter) WriteStatusHeader() {
-	if !self.statusWritten {
-		self.writeStatusHeader()
+func (rw *responseTracker) WriteStatusHeader() {
+	if !rw.statusWritten {
+		rw.writeStatusHeader()
 	}
 }
 
-func (self *baseResponseWriter) WriteHeader(s int) {
-	if !self.statusWritten {
-		self.status = s
-		self.writeStatusHeader()
+func (rw *responseTracker) Status() int {
+	return rw.status
+}
+
+func (rw *responseTracker) Size() int64 {
+	return rw.size
+}
+
+func (rw *responseTracker) SetStatus(status int) {
+	if !rw.statusWritten {
+		rw.status = status
 	}
 }
 
-func (self *baseResponseWriter) Status() int {
-	return self.status
+func (rw *responseTracker) Response() []byte {
+	return rw.response
 }
 
-func (self *baseResponseWriter) Size() int {
-	return self.size
-}
-
-func (self *baseResponseWriter) SetStatus(status int) {
-	if !self.statusWritten {
-		self.status = status
-	}
-}
-
-func (self *baseResponseWriter) ResponseCopy() []byte {
-	return self.response
-}
-
-type flushWriter struct {
-	ResponseWriter
-	http.Flusher
-}
-
-type hijackWriter struct {
-	ResponseWriter
-	http.Hijacker
-}
-
-type closeNotifyWriter struct {
-	ResponseWriter
-	http.CloseNotifier
-}
-
-type hijackFlushWriter struct {
-	ResponseWriter
-	http.Flusher
-	http.Hijacker
-}
-
-type hijackCloseNotifyWriter struct {
-	ResponseWriter
-	http.Hijacker
-	http.CloseNotifier
-}
-
-type closeNotifyFlushWriter struct {
-	ResponseWriter
-	http.CloseNotifier
-	http.Flusher
-}
-
-type allTheThingsWriter struct {
-	ResponseWriter
-	http.Flusher
-	http.Hijacker
-	http.CloseNotifier
-}
-
-func newResponseWriter(w http.ResponseWriter, default_status int) ResponseWriter {
-	base_writer := &baseResponseWriter{
-		ResponseWriter: w,
-		defaultStatus:  default_status,
-		response:       make([]byte, 0, 0),
+func newResponseTracker(w http.ResponseWriter, default_status int, store_response bool) *responseTracker {
+	rw := &responseTracker{
+		defaultStatus: default_status,
+		storeResponse: store_response,
 	}
 
-	flusher, flusher_ok := w.(http.Flusher)
-	hijacker, hijacker_ok := w.(http.Hijacker)
-	close_notifier, close_notifier_ok := w.(http.CloseNotifier)
-
-	if flusher_ok {
-		if hijacker_ok && close_notifier_ok {
-			return allTheThingsWriter{
-				base_writer,
-				flusher,
-				hijacker,
-				close_notifier,
+	hooks := httpsnoop.Hooks{
+		WriteHeader: func(next httpsnoop.WriteHeaderFunc) httpsnoop.WriteHeaderFunc {
+			return func(code int) {
+				if !rw.statusWritten {
+					next(code)
+					rw.status = code
+					rw.statusWritten = true
+				}
 			}
-		}
+		},
 
-		if close_notifier_ok {
-			return closeNotifyFlushWriter{
-				base_writer,
-				close_notifier,
-				flusher,
+		Write: func(next httpsnoop.WriteFunc) httpsnoop.WriteFunc {
+			return func(p []byte) (int, error) {
+				if !rw.statusWritten {
+					rw.writeStatusHeader()
+				}
+				n, err := next(p)
+				if n >= 0 {
+					if rw.storeResponse {
+						rw.response = append(rw.response, p[:n]...)
+					}
+					rw.size += int64(n)
+				}
+				return n, err
 			}
-		}
+		},
 
-		if hijacker_ok {
-			return hijackFlushWriter{
-				base_writer,
-				flusher,
-				hijacker,
+		ReadFrom: func(next httpsnoop.ReadFromFunc) httpsnoop.ReadFromFunc {
+			return func(src io.Reader) (int64, error) {
+				if !rw.statusWritten {
+					rw.writeStatusHeader()
+				}
+
+				if rw.storeResponse {
+					var buf bytes.Buffer
+					_, err := io.Copy(&buf, src)
+					if err != nil {
+						return 0, err
+					}
+					rw.response = append(rw.response, buf.Bytes()...)
+					return next(&buf)
+				}
+
+				n, err := next(src)
+				if n >= 0 {
+					rw.size += int64(n)
+				}
+				return n, err
 			}
-		}
-
-		return flushWriter{
-			base_writer,
-			flusher,
-		}
+		},
 	}
 
-	if close_notifier_ok {
-		if hijacker_ok {
-			return hijackCloseNotifyWriter{
-				base_writer,
-				hijacker,
-				close_notifier,
-			}
-		}
-
-		return closeNotifyWriter{
-			base_writer,
-			close_notifier,
-		}
-	}
-
-	if hijacker_ok {
-		return hijackWriter{
-			base_writer,
-			hijacker,
-		}
-	}
-
-	return base_writer
+	rw.ResponseWriter = httpsnoop.Wrap(w, hooks)
+	return rw
 }
